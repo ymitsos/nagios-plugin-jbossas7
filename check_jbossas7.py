@@ -210,7 +210,7 @@ def main(argv):
     p.add_option('-A', '--action', action='store', type='choice', dest='action', default='server_status', help='The action you want to take',
                  choices=['server_status', 'heap_usage', 'non_heap_usage', 'eden_space_usage',
                           'old_gen_usage', 'perm_gen_usage', 'code_cache_usage', 'gctime',
-                          'queue_depth', 'datasource', 'xa_datasource', 'threading'])
+                          'queue_depth', 'datasource', 'xa_datasource', 'threading', 'uptime'])
     p.add_option('-D', '--perf-data', action='store_true', dest='perf_data', default=False, help='Enable output of Nagios performance data')
     p.add_option('-m', '--memorypool', action='store', dest='memory_pool', default=None, help='The memory pool type')
     p.add_option('-q', '--queuename', action='store', dest='queue_name', default=None, help='The queue name for which you want to retrieve queue depth')
@@ -263,6 +263,8 @@ def main(argv):
         return check_xa_datasource(host, port, user, passwd, datasource_name, ds_stat_type, warning, critical, perf_data)
     elif action == "threading":
         return check_threading(host, port, user, passwd, thread_stat_type, warning, critical, perf_data)
+    elif action == "uptime":
+        return check_uptime(host, port, user, passwd, warning, critical, perf_data)
     else:
         return 2
 
@@ -529,6 +531,32 @@ def get_datasource_stats(host, port, user, passwd, is_xa, ds_name, ds_stat_type)
     except Exception, e:
         return exit_with_general_critical(e)
 
+def get_uptime(host, port, user, passwd):
+    try:
+        payload = {'include-runtime': 'true'}
+        url = "/core-service/platform-mbean/type/runtime"
+        
+        data = get_digest_auth_json(host, port, url, user, passwd, payload)
+        uptime = data['uptime']
+        
+        return uptime
+    except Exception, e:
+        return exit_with_general_critical(e)
+
+def check_uptime(host, port, user, passwd, warning, critical, perf_data):
+    warning = warning or 180000
+    critical = critical or 60000
+    try:
+        uptime = get_uptime(host, port, user, passwd)
+        
+        message = "Uptime: %s milliseconds" % uptime
+        message += performance_data(perf_data, [(uptime, "uptime", warning, critical)])
+        
+        return check_levels(-uptime + critical, critical - warning, warning - warning, message)
+    except Exception, e:
+        return exit_with_general_critical(e)
+    except Exception, e:
+        return exit_with_general_critical(e)
 
 def check_non_xa_datasource(host, port, user, passwd, ds_name, ds_stat_type, warning, critical, perf_data):
     warning = warning or 0
